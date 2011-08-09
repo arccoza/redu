@@ -63,6 +63,8 @@ namespace Redu
             get { return MessageParser.Inst; }
         }
 
+        protected uint _selectedDb = 0;
+
         protected Countdown countdownEvent;
 
         public CommandsBase(RedisConnection connection)
@@ -166,10 +168,12 @@ namespace Redu
 
         public TRet Select(uint index)
         {
-            Commander(delegate(List<IBulk> inPkg)
-            {
-                CheckOk(inPkg);
-            }, "SELECT", new string[] { index.ToString() });
+            _selectedDb = index;
+
+            //Commander(delegate(List<IBulk> inPkg)
+            //{
+            //    CheckOk(inPkg);
+            //}, "SELECT", new string[] { index.ToString() });
 
             return (TRet)this;
         }
@@ -934,10 +938,10 @@ namespace Redu
                 callback(pairs);
         }
 
-        protected void Commander(Action<List<IBulk>> callback, string instruction, params ICollection<string>[] argCollections)
+        protected void Commander(Action<List<IBulk>> callback, string instruction, params ICollection<string>[] tableOfArgs/*argCollections*/)
             //where TPkg : List<IBulk>, new()
         {
-            Commander(null, callback, instruction, argCollections);
+            Commander(null, callback, instruction, tableOfArgs);
         }
 
         protected void Commander(MessageQueue mq, Action<List<IBulk>> callback, string instruction, params ICollection<string>[] tableOfArgs)
@@ -946,47 +950,62 @@ namespace Redu
         {
             List<byte> msg = new List<byte>();
 
-            MessageBuilder.Inst.Build(msg, instruction, tableOfArgs);
+            //MessageBuilder.Inst.Build(msg, instruction, tableOfArgs);
 
             if (mq != null)
             {
+                MessageBuilder.Inst.Build(msg, "SELECT", new string[] { _selectedDb.ToString() });
+                mq.Queue(msg.ToArray(), delegate(List<IBulk> inPkg)
+                {
+                    CheckOk(inPkg);
+                });
+
+                msg.Clear();
+
+                MessageBuilder.Inst.Build(msg, instruction, tableOfArgs);
                 mq.Queue(msg.ToArray(), callback);
-                
+
                 return;
+            }
+            else
+            {
+                MessageBuilder.Inst.Build(msg, "SELECT", new string[] { _selectedDb.ToString() });
+                MessageBuilder.Inst.Build(msg, instruction, tableOfArgs);
             }
 
             countdownEvent.AddCount(1);
 
             Connection.Send(msg.ToArray(), delegate(ReceiveHandler h)
             {
-                callback((List<IBulk>)h.Packages[0]);
+                CheckOk(h.Packages[0]); //Check pipelined db select was ok.
+                callback((List<IBulk>)h.Packages[1]); //Send data to callback.
 
                 countdownEvent.Signal();
-            });
+            }, 2);
         }
 
-        protected void Commander(MessageQueue mq, Action<List<IBulk>> callback, string instruction, params IEnumerable<ICollection<string>>[] tablesOfArgs)
-        {
-            List<byte> msg = new List<byte>();
+        //protected void Commander(MessageQueue mq, Action<List<IBulk>> callback, string instruction, params IEnumerable<ICollection<string>>[] tablesOfArgs)
+        //{
+        //    List<byte> msg = new List<byte>();
 
-            MessageBuilder.Inst.Build(msg, instruction, tablesOfArgs);
+        //    MessageBuilder.Inst.Build(msg, instruction, tablesOfArgs);
 
-            if (mq != null)
-            {
-                mq.Queue(msg.ToArray(), callback);
+        //    if (mq != null)
+        //    {
+        //        mq.Queue(msg.ToArray(), callback);
 
-                return;
-            }
+        //        return;
+        //    }
 
-            countdownEvent.AddCount(1);
+        //    countdownEvent.AddCount(1);
 
-            Connection.Send(msg.ToArray(), delegate(ReceiveHandler h)
-            {
-                callback((List<IBulk>)h.Packages[0]);
+        //    Connection.Send(msg.ToArray(), delegate(ReceiveHandler h)
+        //    {
+        //        callback((List<IBulk>)h.Packages[0]);
 
-                countdownEvent.Signal();
-            });
-        }
+        //        countdownEvent.Signal();
+        //    });
+        //}
 
         public TRet Wait()
         {
