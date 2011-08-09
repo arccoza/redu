@@ -63,20 +63,21 @@ namespace Redu
             get { return MessageParser.Inst; }
         }
 
-        protected uint _selectedDb = 0;
+        protected uint[] _selectedDb;
 
-        protected Countdown countdownEvent;
+        protected Countdown _countdownEvent;
 
         public CommandsBase(RedisConnection connection)
-            : this(connection, new Countdown(0))
+            : this(connection, new Countdown(0), new uint[] { 0 })
         {
             Init();
         }
 
-        public CommandsBase(RedisConnection connection, Countdown countdownEvent)
+        public CommandsBase(RedisConnection connection, Countdown countdownEvent, uint[] selectedDb)
         {
             Connection = connection;
-            this.countdownEvent = countdownEvent;
+            this._countdownEvent = countdownEvent;
+            _selectedDb = selectedDb;
         }
 
         protected virtual void Init()
@@ -168,7 +169,7 @@ namespace Redu
 
         public TRet Select(uint index)
         {
-            _selectedDb = index;
+            _selectedDb[0] = index;
 
             //Commander(delegate(List<IBulk> inPkg)
             //{
@@ -954,7 +955,7 @@ namespace Redu
 
             if (mq != null)
             {
-                MessageBuilder.Inst.Build(msg, "SELECT", new string[] { _selectedDb.ToString() });
+                MessageBuilder.Inst.Build(msg, "SELECT", new string[] { _selectedDb[0].ToString() });
                 mq.Queue(msg.ToArray(), delegate(List<IBulk> inPkg)
                 {
                     CheckOk(inPkg);
@@ -969,18 +970,18 @@ namespace Redu
             }
             else
             {
-                MessageBuilder.Inst.Build(msg, "SELECT", new string[] { _selectedDb.ToString() });
+                MessageBuilder.Inst.Build(msg, "SELECT", new string[] { _selectedDb[0].ToString() });
                 MessageBuilder.Inst.Build(msg, instruction, tableOfArgs);
             }
 
-            countdownEvent.AddCount(1);
+            _countdownEvent.AddCount(1);
 
             Connection.Send(msg.ToArray(), delegate(ReceiveHandler h)
             {
                 CheckOk(h.Packages[0]); //Check pipelined db select was ok.
                 callback((List<IBulk>)h.Packages[1]); //Send data to callback.
 
-                countdownEvent.Signal();
+                _countdownEvent.Signal();
             }, 2);
         }
 
@@ -1009,14 +1010,14 @@ namespace Redu
 
         public TRet Wait()
         {
-            countdownEvent.Wait();
+            _countdownEvent.Wait();
 
             return (TRet)this;
         }
 
         public TRet Wait(int millisecondsTimeout)
         {
-            countdownEvent.Wait(millisecondsTimeout);
+            _countdownEvent.Wait(millisecondsTimeout);
 
             return (TRet)this;
         }

@@ -15,19 +15,19 @@ namespace Redu
         {
         }
 
-        public ListCommands(RedisConnection connection, Countdown countdownEvent)
-            : base(connection, countdownEvent)
+        public ListCommands(RedisConnection connection, Countdown countdownEvent, uint[] selectedDb)
+            : base(connection, countdownEvent, selectedDb)
         {
         }
 
         protected override void Init()
         {
-            Strings = new StringCommands(Connection, countdownEvent);
-            Hashes = new HashCommands(Connection, countdownEvent);
+            Strings = new StringCommands(Connection, _countdownEvent, _selectedDb);
+            Hashes = new HashCommands(Connection, _countdownEvent, _selectedDb);
             Lists = this;
-            Sets = new SetCommands(Connection, countdownEvent);
-            SortedSets = new SortedSetCommands(Connection, countdownEvent);
-            PubSub = new PubSubCommands(Connection, countdownEvent);
+            Sets = new SetCommands(Connection, _countdownEvent, _selectedDb);
+            SortedSets = new SortedSetCommands(Connection, _countdownEvent, _selectedDb);
+            PubSub = new PubSubCommands(Connection, _countdownEvent, _selectedDb);
 
             base.Init();
         }

@@ -49,8 +49,8 @@ namespace Redu
             _subscriptionLocker = new object();
         }
 
-        public PubSubCommands(RedisConnection connection, Countdown countdownEvent)
-            : base(connection, countdownEvent)
+        public PubSubCommands(RedisConnection connection, Countdown countdownEvent, uint[] selectedDb)
+            : base(connection, countdownEvent, selectedDb)
         {
             Id = Guid.NewGuid();
             Subscriptions = new Dictionary<string, MessageCallback>();
@@ -60,11 +60,11 @@ namespace Redu
 
         protected override void Init()
         {
-            Strings = new StringCommands(Connection, countdownEvent);
-            Hashes = new HashCommands(Connection, countdownEvent);
-            Lists = new ListCommands(Connection, countdownEvent);
-            Sets = new SetCommands(Connection, countdownEvent);
-            SortedSets = new SortedSetCommands(Connection, countdownEvent);
+            Strings = new StringCommands(Connection, _countdownEvent, _selectedDb);
+            Hashes = new HashCommands(Connection, _countdownEvent, _selectedDb);
+            Lists = new ListCommands(Connection, _countdownEvent, _selectedDb);
+            Sets = new SetCommands(Connection, _countdownEvent, _selectedDb);
+            SortedSets = new SortedSetCommands(Connection, _countdownEvent, _selectedDb);
             PubSub = this;
 
             base.Init();
@@ -225,7 +225,7 @@ namespace Redu
                 c.Send(Id, outMsg.ToArray()).Wait(30000);
             }
 
-            countdownEvent.AddCount(1);
+            _countdownEvent.AddCount(1);
 
             return this;
         }
@@ -296,7 +296,7 @@ namespace Redu
                 }
             }
 
-            countdownEvent.AddCount(1);
+            _countdownEvent.AddCount(1);
 
             return this;
         }
@@ -357,7 +357,7 @@ namespace Redu
 
                 if (type == "subscribe" || type == "psubscribe" || type == "unsubscribe" || type == "punsubscribe")
                 {
-                    countdownEvent.Signal();
+                    _countdownEvent.Signal();
                 }
 
                 if (SubscriptionCount > 0)
